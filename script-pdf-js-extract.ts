@@ -3,7 +3,6 @@ import * as fs from 'fs';
 
 const path = 'factsheets';
 
-// using pdf.js-extract
 const pdfExtractViaJsExtract = () => {
   const pdfExtract = new PDFExtract();
   const options: PDFExtractOptions = {};

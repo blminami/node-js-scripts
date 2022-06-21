@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "crawler-request": "^1.2.2",
     "pdf.js-extract": "^0.2.0"
   },
   "devDependencies": {
