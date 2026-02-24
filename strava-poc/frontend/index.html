@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strava POC</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Reset & base                                                         */
+    /* ------------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    p.subtitle { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
+
+    /* ------------------------------------------------------------------ */
+    /* Connect button                                                       */
+    /* ------------------------------------------------------------------ */
+    .btn-strava {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: #fc4c02;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.7rem 1.4rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .btn-strava:hover { background: #e04400; }
+
+    .btn-secondary {
+      background: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #f0f0f0; }
+
+    /* ------------------------------------------------------------------ */
+    /* Status / athlete info                                                */
+    /* ------------------------------------------------------------------ */
+    #status-bar {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      width: 100%;
+      max-width: 720px;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    #status-bar .athlete-info { font-size: 0.95rem; }
+    #status-bar .athlete-info strong { display: block; font-size: 1rem; }
+    #status-bar .athlete-info span { color: #888; font-size: 0.85rem; }
+
+    /* ------------------------------------------------------------------ */
+    /* Activity list                                                        */
+    /* ------------------------------------------------------------------ */
+    #activities-section {
+      width: 100%;
+      max-width: 720px;
+    }
+    #activities-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+    #activities-header h2 { font-size: 1.1rem; }
+
+    #activity-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .activity-card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+    .activity-card .act-name {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+    }
+    .activity-card .act-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      font-size: 0.85rem;
+      color: #555;
+    }
+    .activity-card .act-meta span { white-space: nowrap; }
+
+    #empty-state {
+      text-align: center;
+      color: #888;
+      font-size: 0.95rem;
+      padding: 2rem 0;
+    }
+
+    #error-banner {
+      background: #fff3f3;
+      border: 1px solid #f5a0a0;
+      color: #c0392b;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      width: 100%;
+      max-width: 720px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Warning banner                                                       */
+    /* ------------------------------------------------------------------ */
+    #poc-warning {
+      background: #fffbe6;
+      border: 1px solid #ffe58f;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      width: 100%;
+      max-width: 720px;
+      font-size: 0.8rem;
+      color: #7c6000;
+      margin-bottom: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Strava POC</h1>
+  <p class="subtitle">Connect your Strava account to view cached running activities.</p>
+
+  <div id="poc-warning">
+    <strong>POC Note:</strong> Activities are held in-memory on the Cloudflare Worker.
+    The cache resets on every cold start — an empty list after reconnecting is expected.
+  </div>
+
+  <div id="error-banner" role="alert"></div>
+
+  <!-- Shown before authentication -->
+  <div id="connect-section">
+    <a id="connect-btn" class="btn-strava" href="#">
+      <!-- Strava bolt icon (inline SVG) -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116z"/>
+        <path d="M8.698 9.886l2.559-5.048 2.558 5.048H8.698z"/>
+      </svg>
+      Connect with Strava
+    </a>
+  </div>
+
+  <!-- Shown after authentication -->
+  <div id="status-bar" style="display:none">
+    <div class="athlete-info">
+      <strong id="athlete-name">—</strong>
+      <span id="athlete-id"></span>
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      <button class="btn-secondary" id="refresh-btn">Refresh activities</button>
+      <button class="btn-secondary" id="disconnect-btn">Disconnect</button>
+    </div>
+  </div>
+
+  <section id="activities-section" style="display:none">
+    <div id="activities-header">
+      <h2>Running activities <span id="activity-count" style="color:#888;font-weight:400"></span></h2>
+    </div>
+    <ul id="activity-list"></ul>
+    <p id="empty-state" style="display:none">
+      No running activities cached yet.<br>
+      Activities appear here when Strava sends a webhook event while this Worker isolate is alive.
+    </p>
+  </section>
+
+  <script>
+    // -----------------------------------------------------------------------
+    // Configuration — update these to match your deployment
+    // -----------------------------------------------------------------------
+    const CONFIG = {
+      // Base URL of the deployed Cloudflare Worker (no trailing slash)
+      workerUrl: 'https://strava-poc-worker.your-account.workers.dev',
+
+      // Your Strava application's client ID (public, safe in frontend)
+      stravaClientId: 'YOUR_STRAVA_CLIENT_ID',
+
+      // OAuth scopes — see architecture doc for justification
+      stravaScope: 'read,activity:read_all',
+    };
+
+    // -----------------------------------------------------------------------
+    // Derived values
+    // -----------------------------------------------------------------------
+    const CALLBACK_URL = `${CONFIG.workerUrl}/auth/callback`;
+
+    // -----------------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------------
+    let session = null; // { athlete_id, athlete_name, access_token, expires_at }
+
+    // -----------------------------------------------------------------------
+    // Boot
+    // -----------------------------------------------------------------------
+    (function init() {
+      // 1. Try to restore an existing session from sessionStorage
+      const stored = sessionStorage.getItem('strava_session');
+      if (stored) {
+        try { session = JSON.parse(stored); } catch { /* ignore */ }
+      }
+
+      // 2. Check for a fresh token in the URL fragment (post-OAuth redirect)
+      const hash = window.location.hash;
+      if (hash.startsWith('#token=')) {
+        try {
+          session = JSON.parse(decodeURIComponent(hash.slice('#token='.length)));
+          sessionStorage.setItem('strava_session', JSON.stringify(session));
+          // Clean the token out of the URL so it isn't bookmarked / shared
+          history.replaceState(null, '', window.location.pathname);
+        } catch (e) {
+          showError('Could not parse token from redirect URL.');
+        }
+      }
+
+      // 3. Check for an OAuth error in query params
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('oauth_error')) {
+        showError(`Strava OAuth error: ${decodeURIComponent(params.get('oauth_error'))}`);
+        history.replaceState(null, '', window.location.pathname);
+      }
+
+      // 4. Build the Strava authorize URL and attach to the connect button
+      const authorizeUrl = buildAuthorizeUrl();
+      document.getElementById('connect-btn').href = authorizeUrl;
+
+      // 5. Wire up button handlers
+      document.getElementById('refresh-btn').addEventListener('click', fetchActivities);
+      document.getElementById('disconnect-btn').addEventListener('click', disconnect);
+
+      // 6. Render initial UI state
+      if (session) {
+        showAuthenticatedUI();
+        fetchActivities();
+      }
+    })();
+
+    // -----------------------------------------------------------------------
+    // OAuth helpers
+    // -----------------------------------------------------------------------
+    function buildAuthorizeUrl() {
+      const params = new URLSearchParams({
+        client_id: CONFIG.stravaClientId,
+        redirect_uri: CALLBACK_URL,
+        response_type: 'code',
+        approval_prompt: 'auto',
+        scope: CONFIG.stravaScope,
+      });
+      return `https://www.strava.com/oauth/authorize?${params}`;
+    }
+
+    // -----------------------------------------------------------------------
+    // UI transitions
+    // -----------------------------------------------------------------------
+    function showAuthenticatedUI() {
+      document.getElementById('connect-section').style.display = 'none';
+      document.getElementById('status-bar').style.display = '';
+      document.getElementById('activities-section').style.display = '';
+
+      document.getElementById('athlete-name').textContent =
+        session.athlete_name || `Athlete`;
+      document.getElementById('athlete-id').textContent =
+        session.athlete_id ? `ID: ${session.athlete_id}` : '';
+    }
+
+    function showUnauthenticatedUI() {
+      document.getElementById('connect-section').style.display = '';
+      document.getElementById('status-bar').style.display = 'none';
+      document.getElementById('activities-section').style.display = 'none';
+    }
+
+    function disconnect() {
+      session = null;
+      sessionStorage.removeItem('strava_session');
+      showUnauthenticatedUI();
+      clearActivityList();
+    }
+
+    // -----------------------------------------------------------------------
+    // Activity fetching
+    // -----------------------------------------------------------------------
+    async function fetchActivities() {
+      clearError();
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+
+      try {
+        const res = await fetch(`${CONFIG.workerUrl}/activities`);
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const activities = await res.json();
+        renderActivities(activities);
+      } catch (err) {
+        showError(`Failed to load activities: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh activities';
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Activity rendering
+    // -----------------------------------------------------------------------
+    function renderActivities(activities) {
+      const list = document.getElementById('activity-list');
+      const empty = document.getElementById('empty-state');
+      const count = document.getElementById('activity-count');
+
+      clearActivityList();
+
+      if (!activities || activities.length === 0) {
+        empty.style.display = '';
+        count.textContent = '';
+        return;
+      }
+
+      empty.style.display = 'none';
+      count.textContent = `(${activities.length})`;
+
+      // Most-recent first
+      const sorted = [...activities].sort(
+        (a, b) => new Date(b.start_date) - new Date(a.start_date)
+      );
+
+      for (const act of sorted) {
+        list.appendChild(buildActivityCard(act));
+      }
+    }
+
+    function buildActivityCard(act) {
+      const li = document.createElement('li');
+      li.className = 'activity-card';
+
+      const distanceKm = act.distance ? (act.distance / 1000).toFixed(2) : '—';
+      const durationMin = act.moving_time ? formatDuration(act.moving_time) : '—';
+      const date = act.start_date_local
+        ? new Date(act.start_date_local).toLocaleDateString(undefined, {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+          })
+        : '—';
+      const pace = act.distance && act.moving_time
+        ? formatPace(act.moving_time, act.distance)
+        : '—';
+      const sportType = act.sport_type || act.type || 'Run';
+
+      li.innerHTML = `
+        <div class="act-name">${escapeHtml(act.name || 'Untitled activity')}</div>
+        <div class="act-meta">
+          <span>${escapeHtml(date)}</span>
+          <span>${escapeHtml(sportType)}</span>
+          <span>${distanceKm} km</span>
+          <span>${durationMin}</span>
+          <span>${pace} /km</span>
+          ${act.total_elevation_gain ? `<span>${act.total_elevation_gain} m elev</span>` : ''}
+        </div>`;
+
+      return li;
+    }
+
+    function clearActivityList() {
+      document.getElementById('activity-list').innerHTML = '';
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('activity-count').textContent = '';
+    }
+
+    // -----------------------------------------------------------------------
+    // Formatting helpers
+    // -----------------------------------------------------------------------
+    function formatDuration(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m ${String(s).padStart(2, '0')}s`;
+    }
+
+    function formatPace(seconds, distanceMeters) {
+      if (!distanceMeters) return '—';
+      const secsPerKm = seconds / (distanceMeters / 1000);
+      const m = Math.floor(secsPerKm / 60);
+      const s = Math.round(secsPerKm % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // -----------------------------------------------------------------------
+    // Error display
+    // -----------------------------------------------------------------------
+    function showError(msg) {
+      const banner = document.getElementById('error-banner');
+      banner.textContent = msg;
+      banner.style.display = '';
+    }
+
+    function clearError() {
+      const banner = document.getElementById('error-banner');
+      banner.textContent = '';
+      banner.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

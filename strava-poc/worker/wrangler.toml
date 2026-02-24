@@ -1,0 +1,24 @@
+name = "strava-poc-worker"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# ---------------------------------------------------------------------------
+# Non-secret environment variables
+# Set FRONTEND_URL to the base URL of your deployed frontend SPA.
+# ---------------------------------------------------------------------------
+[vars]
+FRONTEND_URL = "https://your-frontend.pages.dev"
+# STRAVA_CLIENT_ID is not a secret but set it here so it is available to the
+# worker without touching source code. Alternatively use `wrangler secret put`.
+# STRAVA_CLIENT_ID = "123456"
+
+# ---------------------------------------------------------------------------
+# Secrets — set with: wrangler secret put <NAME>
+#
+#   wrangler secret put STRAVA_CLIENT_ID
+#   wrangler secret put STRAVA_CLIENT_SECRET
+#   wrangler secret put STRAVA_VERIFY_TOKEN
+#   wrangler secret put STRAVA_ACCESS_TOKEN
+#
+# Never commit actual secret values to source control.
+# ---------------------------------------------------------------------------
