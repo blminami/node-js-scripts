@@ -115,7 +115,6 @@ If the Apify run succeeded (`itemCount > 0`) but the output article is empty or 
 ```sql
 SELECT
   a.id,
-  at.title,
   at.body_draft,
   a.status,
   a.created_datetime
@@ -366,7 +365,6 @@ For file ingestions, Temporal handles the ML transformation step. If the workflo
 ```sql
 SELECT
   a.id,
-  at.title,
   LENGTH(at.body_draft) as body_length,
   a.status,
   a.created_datetime
